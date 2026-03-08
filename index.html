@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DNS Tunnel Tester</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Vazirmatn:wght@400;500;700&display=swap');
+  :root {
+    --bg:#080a0d; --surface:#0e1117; --surface2:#131720;
+    --border:#1c2030; --accent:#00e57a; --blue:#3b9eff;
+    --warn:#ffb020; --danger:#ff3b5c; --text:#dce3f0;
+    --muted:#4a546a; --pass:#00e57a; --partial:#ffb020;
+    --fail:#ff3b5c; --ssh:#a78bfa; --tunnel:#34d399;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Vazirmatn',sans-serif;
+    height:100vh;display:grid;grid-template-rows:56px 1fr;overflow:hidden;}
+
+  header{display:flex;align-items:center;gap:14px;padding:0 24px;
+    background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;}
+  .logo{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--accent);}
+  .logo em{color:var(--muted);font-style:normal;}
+  .server-badge{font-family:'JetBrains Mono',monospace;font-size:11px;padding:3px 10px;
+    border-radius:20px;border:1px solid var(--border);color:var(--muted);
+    display:flex;align-items:center;gap:6px;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--fail);transition:all .3s;}
+  .dot.on{background:var(--pass);box-shadow:0 0 6px var(--pass);}
+
+  .layout{display:grid;grid-template-columns:340px 1fr;overflow:hidden;}
+
+  .sidebar{background:var(--surface);border-left:1px solid var(--border);
+    padding:16px;display:flex;flex-direction:column;gap:11px;overflow-y:auto;}
+
+  .section-title{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;
+    letter-spacing:1.4px;padding:6px 0 4px;border-top:1px solid var(--border);margin-top:2px;}
+  .section-title:first-child{border-top:none;margin-top:0;}
+
+  .field label{display:block;font-size:10px;font-weight:500;color:var(--muted);
+    text-transform:uppercase;letter-spacing:1.2px;margin-bottom:5px;}
+  textarea,input{width:100%;background:var(--bg);border:1px solid var(--border);
+    border-radius:7px;color:var(--text);font-family:'JetBrains Mono',monospace;
+    font-size:12px;padding:8px 10px;outline:none;resize:vertical;
+    transition:border-color .2s;direction:ltr;}
+  textarea{min-height:130px;}
+  textarea:focus,input:focus{border-color:var(--accent);}
+  .hint{font-size:10px;color:var(--muted);margin-top:4px;direction:rtl;line-height:1.6;}
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+
+  .btn-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
+  .btn{padding:9px 6px;border:none;border-radius:7px;font-family:'Vazirmatn',sans-serif;
+    font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;}
+  .btn-go{background:var(--accent);color:#000;grid-column:1/-1;}
+  .btn-go:hover{filter:brightness(1.1);}
+  .btn-go:disabled{opacity:.35;cursor:not-allowed;filter:none;}
+  .btn-pause{background:transparent;border:1px solid var(--warn);color:var(--warn);display:none;}
+  .btn-pause:hover{background:var(--warn);color:#000;}
+  .btn-pause.resumed{border-color:var(--blue);color:var(--blue);}
+  .btn-pause.resumed:hover{background:var(--blue);color:#000;}
+  .btn-stop{background:transparent;border:1px solid var(--danger);color:var(--danger);display:none;}
+  .btn-stop:hover{background:var(--danger);color:#fff;}
+
+  .prog-wrap{display:flex;flex-direction:column;gap:4px;}
+  .prog-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .prog-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--blue));width:0%;transition:width .3s;}
+  .prog-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);text-align:center;}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;}
+  .stat{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 5px;text-align:center;}
+  .stat .v{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;display:block;}
+  .stat .l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-top:2px;display:block;}
+
+  .range-pills{display:flex;flex-wrap:wrap;gap:4px;}
+  .range-pill{font-family:'JetBrains Mono',monospace;font-size:10px;
+    padding:2px 8px;border-radius:20px;border:1px solid var(--blue);
+    color:var(--blue);background:rgba(59,158,255,.07);}
+
+  .activity-box{background:var(--bg);border:1px solid var(--border);border-radius:7px;
+    padding:9px;max-height:140px;overflow-y:auto;}
+  .act-title{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;
+    margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;}
+  .pause-badge{font-size:10px;color:var(--warn);font-family:'JetBrains Mono',monospace;display:none;}
+  .act-item{font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:2px 0;border-bottom:1px solid var(--border);}
+  .act-item:last-child{border-bottom:none;}
+  .act-ip{color:var(--text);flex:1;min-width:0;}
+  .act-range{color:var(--muted);font-size:9px;padding:0 4px;flex-shrink:0;max-width:75px;overflow:hidden;text-overflow:ellipsis;}
+  .act-step{padding:1px 5px;border-radius:3px;font-size:10px;background:var(--surface2);flex-shrink:0;}
+  .act-step.UDP{color:#3b9eff;} .act-step.TCP{color:#a78bfa;} .act-step.TXT{color:#ffb020;}
+  .act-step.LTXT{color:#fb923c;} .act-step.TCP-HS{color:#818cf8;}
+  .act-step.TUNNEL{color:#00e57a;font-weight:700;} .act-step.SSH{color:#f472b6;}
+
+  .panel{display:flex;flex-direction:column;overflow:hidden;}
+  .toolbar{padding:9px 16px;border-bottom:1px solid var(--border);background:var(--surface);
+    display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;}
+  .fbtn{padding:4px 12px;border-radius:20px;font-size:11px;font-family:'Vazirmatn',sans-serif;
+    border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;}
+  .fbtn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,122,.07);}
+  .expbtn{margin-right:auto;padding:4px 14px;border-radius:20px;font-size:11px;
+    font-family:'Vazirmatn',sans-serif;border:1px solid var(--blue);
+    background:transparent;color:var(--blue);cursor:pointer;transition:all .15s;}
+  .expbtn:hover{background:rgba(59,158,255,.1);}
+
+  .tbl-wrap{flex:1;overflow-y:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  thead th{position:sticky;top:0;background:var(--surface2);padding:8px 8px;text-align:center;
+    font-size:10px;font-weight:500;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.7px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  thead th:first-child{text-align:right;}
+  thead th.th-tunnel{color:var(--tunnel);}
+  tbody tr{border-bottom:1px solid var(--border);animation:rowIn .15s ease;}
+  @keyframes rowIn{from{opacity:0;transform:translateY(-2px);}to{opacity:1;}}
+  tbody tr:hover{background:var(--surface2);}
+  tbody tr.pass    td:first-child{border-right:3px solid var(--pass);}
+  tbody tr.partial td:first-child{border-right:3px solid var(--partial);}
+  tbody tr.fail    td:first-child{border-right:3px solid var(--fail);opacity:.4;}
+  td{padding:5px 8px;white-space:nowrap;text-align:center;}
+  td:first-child{text-align:right;}
+  .td-ip{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;direction:ltr;text-align:left;}
+  .td-range{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;
+    max-width:80px;overflow:hidden;text-overflow:ellipsis;}
+  .td-lat{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);}
+  .td-rcode{font-family:'JetBrains Mono',monospace;font-size:10px;}
+  .td-rcode.ok{color:var(--tunnel);} .td-rcode.fail{color:var(--fail);}
+  .ck{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 5px;border-radius:3px;}
+  .ck.on  {background:rgba(0,229,122,.12);color:var(--pass);}
+  .ck.tun {background:rgba(52,211,153,.15);color:var(--tunnel);font-weight:700;}
+  .ck.ssh {background:rgba(167,139,250,.12);color:var(--ssh);}
+  .ck.off {background:rgba(255,59,92,.05);color:var(--muted);}
+  .sc{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;}
+  .sc.hi{color:var(--pass);} .sc.mi{color:var(--warn);} .sc.lo{color:var(--fail);}
+  .ssh-banner{font-size:10px;color:var(--ssh);direction:ltr;text-align:left;
+    max-width:160px;overflow:hidden;text-overflow:ellipsis;}
+  .empty{padding:60px;text-align:center;color:var(--muted);font-size:13px;}
+  ::-webkit-scrollbar{width:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">dns<em>//</em>tester</div>
+  <div class="server-badge">
+    <div class="dot" id="dot"></div>
+    <span id="srvLbl">server offline</span>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+
+    <div class="section-title">رنج‌ها / IP ها</div>
+    <div class="field">
+      <textarea id="ranges" placeholder="# رنج اول&#10;102.23.226.0/24&#10;&#10;# رنج دوم&#10;94.182.0.0/24&#10;&#10;8.8.8.8"></textarea>
+      <div class="hint">خط خالی = جداکننده رنج‌ها &nbsp;|&nbsp; # = اسم رنج</div>
+    </div>
+
+    <div class="section-title">تنظیمات tunnel</div>
+    <div class="field">
+      <label>tunnel domain</label>
+      <input type="text" id="tunnelDomain" placeholder="ns.yourdomain.com">
+      <div class="hint">دامنه‌ای که NS اش به VPS اشاره می‌کنه.<br>تست واقعی: &lt;random&gt;.ns.yourdomain.com TXT</div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>E2E timeout (ms)</label>
+        <input type="number" id="e2eTimeout" value="6000" min="2000" max="15000" step="500">
+      </div>
+      <div class="field">
+        <label>UDP timeout (ms)</label>
+        <input type="number" id="udpTimeout" value="3000" min="1000" max="8000" step="500">
+      </div>
+    </div>
+
+    <div class="section-title">تنظیمات اسکن</div>
+    <div class="row3">
+      <div class="field">
+        <label>workers</label>
+        <input type="number" id="concurrency" value="40" min="5" max="200">
+      </div>
+      <div class="field">
+        <label>TCP (ms)</label>
+        <input type="number" id="tcpTimeout" value="4000" min="1000" max="10000" step="500">
+      </div>
+      <div class="field">
+        <label>min score</label>
+        <input type="number" id="minScore" value="40" min="0" max="100">
+      </div>
+    </div>
+
+    <div id="rangePills" class="range-pills" style="display:none"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-go"    id="goBtn"    onclick="startScan()">▶ شروع اسکن</button>
+      <button class="btn btn-pause" id="pauseBtn" onclick="togglePause()">⏸ پاز</button>
+      <button class="btn btn-stop"  id="stopBtn"  onclick="stopScan()">■ توقف</button>
+    </div>
+
+    <div class="prog-wrap">
+      <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+      <div class="prog-label" id="progLabel"></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><span class="v" id="sTotal">—</span><span class="l">کل</span></div>
+      <div class="stat"><span class="v" id="sTunnel" style="color:var(--tunnel)">0</span><span class="l">tunnel✓</span></div>
+      <div class="stat"><span class="v" id="sPass"   style="color:var(--pass)">0</span><span class="l">pass</span></div>
+      <div class="stat"><span class="v" id="sActive" style="color:var(--blue)">0</span><span class="l">active</span></div>
+    </div>
+
+    <div class="activity-box">
+      <div class="act-title">
+        <span>⚡ live</span>
+        <span class="pause-badge" id="pauseBadge">⏸ PAUSED</span>
+      </div>
+      <div id="activity"></div>
+    </div>
+
+  </div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <button class="fbtn active" onclick="setFilter('all',this)">همه</button>
+      <button class="fbtn" onclick="setFilter('pass',this)">✓ pass</button>
+      <button class="fbtn" onclick="setFilter('partial',this)">~ partial</button>
+      <button class="fbtn" onclick="setFilter('fail',this)">✗ fail</button>
+      <button class="expbtn" onclick="exportIPs()">↓ خروجی IP های تمیز</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th style="text-align:right">IP</th>
+          <th>رنج</th>
+          <th>UDP</th>
+          <th>TCP</th>
+          <th>Rec</th>
+          <th>TXT</th>
+          <th>TCP-HS</th>
+          <th class="th-tunnel">TUNNEL</th>
+          <th class="th-tunnel">rcode</th>
+          <th class="th-tunnel">t-lat</th>
+          <th>SSH</th>
+          <th>lat</th>
+          <th>score</th>
+          <th style="text-align:left">SSH Banner</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="empty">رنج‌ها و tunnel domain رو وارد کن و اسکن رو شروع کن</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:3737';
+let allResults=[], filter='all', minScore=40, scanning=false, paused=false;
+
+async function ping() {
+  try {
+    const r = await fetch(`${API}/ping`);
+    if (r.ok) { document.getElementById('dot').classList.add('on'); document.getElementById('srvLbl').textContent='server online'; }
+    else throw 0;
+  } catch { document.getElementById('dot').classList.remove('on'); document.getElementById('srvLbl').textContent='server offline'; }
+}
+ping(); setInterval(ping, 4000);
+
+function renderActive(list) {
+  document.getElementById('sActive').textContent = list.length;
+  document.getElementById('activity').innerHTML = list.slice(-12).map(e =>
+    `<div class="act-item">
+      <span class="act-ip">${e.ip}</span>
+      <span class="act-range">${e.range||''}</span>
+      <span class="act-step ${(e.step||'').replace(/[^A-Z0-9\-]/g,'')}">${e.step||'…'}</span>
+    </div>`
+  ).join('');
+}
+
+async function togglePause() {
+  const btn   = document.getElementById('pauseBtn');
+  const badge = document.getElementById('pauseBadge');
+  if (!paused) {
+    await fetch(`${API}/pause`, { method:'POST' });
+    paused = true;
+    btn.textContent='▶ ادامه'; btn.classList.add('resumed');
+    badge.style.display='block';
+  } else {
+    await fetch(`${API}/resume`, { method:'POST' });
+    paused = false;
+    btn.textContent='⏸ پاز'; btn.classList.remove('resumed');
+    badge.style.display='none';
+  }
+}
+
+function startScan() {
+  const ranges = document.getElementById('ranges').value.trim();
+  if (!ranges) return;
+  const tunnelDomain = document.getElementById('tunnelDomain').value.trim();
+  const concurrency  = parseInt(document.getElementById('concurrency').value)  || 40;
+  const e2eTimeout   = parseInt(document.getElementById('e2eTimeout').value)   || 6000;
+  const udpTimeout   = parseInt(document.getElementById('udpTimeout').value)   || 3000;
+  const tcpTimeout   = parseInt(document.getElementById('tcpTimeout').value)   || 4000;
+  minScore = parseInt(document.getElementById('minScore').value) || 0;
+
+  allResults = []; paused = false;
+  document.getElementById('tbody').innerHTML = '';
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('rangePills').style.display = 'none';
+  document.getElementById('rangePills').innerHTML = '';
+  document.getElementById('pauseBadge').style.display = 'none';
+  ['sTotal','sTunnel','sPass','sActive'].forEach(id =>
+    document.getElementById(id).textContent = id==='sTotal' ? '…' : '0');
+  document.getElementById('progFill').style.width = '0%';
+  document.getElementById('progLabel').textContent = '';
+  document.getElementById('goBtn').disabled = true;
+  document.getElementById('pauseBtn').style.display = 'block';
+  document.getElementById('pauseBtn').textContent = '⏸ پاز';
+  document.getElementById('pauseBtn').classList.remove('resumed');
+  document.getElementById('stopBtn').style.display = 'block';
+  renderActive([]);
+  scanning = true;
+
+  fetch(`${API}/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ranges, tunnelDomain, concurrency, e2eTimeout, udpTimeout, tcpTimeout })
+  }).then(res => {
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = '', lastEvt = '';
+    function read() {
+      reader.read().then(({ done, value }) => {
+        if (done || !scanning) { endScan(); return; }
+        buf += dec.decode(value);
+        const lines = buf.split('\n'); buf = lines.pop();
+        for (const line of lines) {
+          if (line.startsWith('event: ')) { lastEvt = line.slice(7).trim(); }
+          else if (line.startsWith('data: ')) {
+            try {
+              const d = JSON.parse(line.slice(6));
+              if (lastEvt === 'start') {
+                document.getElementById('sTotal').textContent = d.total;
+                if (d.groups && d.groups.length > 1) {
+                  const p = document.getElementById('rangePills');
+                  p.style.display = 'flex';
+                  p.innerHTML = d.groups.map(g =>
+                    `<span class="range-pill">${g.label} (${g.count})</span>`).join('');
+                }
+              }
+              else if (lastEvt === 'active')   { renderActive(d.list || []); }
+              else if (lastEvt === 'result')    { handleResult(d); }
+              else if (lastEvt === 'progress')  {
+                const pct = Math.round(d.done / d.total * 100);
+                document.getElementById('progFill').style.width = pct + '%';
+                document.getElementById('progLabel').textContent =
+                  `${d.done} / ${d.total}  (${pct}%)  active: ${d.active}`;
+              }
+              else if (lastEvt === 'done') { endScan(); }
+            } catch {}
+          }
+        }
+        read();
+      });
+    }
+    read();
+  }).catch(() => {
+    alert('سرور در دسترس نیست.\n\nدر ترمینال اجرا کن:\n  node server.js');
+    endScan();
+  });
+}
+
+async function stopScan() {
+  await fetch(`${API}/stop`, { method: 'POST' });
+  scanning = false;
+}
+
+function endScan() {
+  scanning = false; paused = false;
+  document.getElementById('goBtn').disabled = false;
+  document.getElementById('pauseBtn').style.display = 'none';
+  document.getElementById('stopBtn').style.display = 'none';
+  document.getElementById('pauseBadge').style.display = 'none';
+  document.getElementById('progFill').style.width = '100%';
+  renderActive([]);
+  if (!allResults.length) {
+    document.getElementById('empty').style.display = 'block';
+    document.getElementById('empty').textContent = 'نتیجه‌ای پیدا نشد.';
+  }
+}
+
+function handleResult(r) {
+  allResults.push(r);
+  document.getElementById('sTunnel').textContent = allResults.filter(x => x.tunnelOk).length;
+  document.getElementById('sPass').textContent   = allResults.filter(x => x.status === 'pass').length;
+  if (filter === 'all' || filter === r.status) renderRow(r);
+}
+
+function ck(v, cls) {
+  return v
+    ? `<span class="ck ${cls||'on'}">✓</span>`
+    : `<span class="ck off">—</span>`;
+}
+
+function renderRow(r) {
+  if (r.score < minScore) return;
+  const tbody = document.getElementById('tbody');
+  const tr    = document.createElement('tr');
+  tr.className = r.status;
+  const lat  = r.udpLatency > 0 ? r.udpLatency+'ms' : (r.tcp53Latency > 0 ? r.tcp53Latency+'ms' : '—');
+  const tLat = r.tunnelLatency > 0 ? r.tunnelLatency+'ms' : '—';
+  const sc   = r.score >= 70 ? 'hi' : r.score >= 40 ? 'mi' : 'lo';
+  const rcodeClass = r.tunnelOk ? 'ok' : 'fail';
+
+  tr.innerHTML = `
+    <td class="td-ip">${r.ip}</td>
+    <td class="td-range" title="${r.range||''}">${r.range||'—'}</td>
+    <td>${ck(r.udp)}</td>
+    <td>${ck(r.tcp53)}</td>
+    <td>${ck(r.recursive)}</td>
+    <td>${ck(r.txtSupport)}</td>
+    <td>${ck(r.tcpTunnelHS)}</td>
+    <td>${ck(r.tunnelOk,'tun')}</td>
+    <td class="td-rcode ${rcodeClass}">${r.tunnelRcode||'—'}</td>
+    <td class="td-lat">${tLat}</td>
+    <td>${ck(r.sshHS,'ssh')}</td>
+    <td class="td-lat">${lat}</td>
+    <td><span class="sc ${sc}">${r.score}</span></td>
+    <td>${r.sshBanner
+      ? `<div class="ssh-banner">${r.sshBanner}</div>`
+      : '<span style="color:var(--muted)">—</span>'}</td>`;
+  tbody.appendChild(tr);
+}
+
+function setFilter(f, btn) {
+  filter = f;
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tbody').innerHTML = '';
+  allResults.forEach(renderRow);
+}
+
+function exportIPs() {
+  const list = allResults.filter(r =>
+    (filter === 'all' || r.status === filter) && r.score >= minScore);
+  if (!list.length) { alert('نتیجه‌ای برای خروجی نیست.'); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([list.map(r => r.ip).join('\n')], { type:'text/plain' }));
+  a.download = 'clean_dns.txt';
+  a.click();
+}
+</script>
+</body>
+</html>
