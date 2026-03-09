@@ -214,6 +214,24 @@ function expandCIDR(cidr) {
   return ips;
 }
 
+function ipToInt(ip) {
+  const p = ip.split('.').map(Number);
+  return ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
+}
+function intToIp(n) {
+  return `${(n>>>24)&0xff}.${(n>>>16)&0xff}.${(n>>>8)&0xff}.${n&0xff}`;
+}
+function expandDashRange(range) {
+  const [startIP, endIP] = range.split('-').map(s => s.trim());
+  if (!startIP || !endIP) return [];
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(startIP) || !/^\d+\.\d+\.\d+\.\d+$/.test(endIP)) return [];
+  const start = ipToInt(startIP), end = ipToInt(endIP);
+  if (end < start || end - start > 65535) return []; // max 65535 برای جلوگیری از abuse
+  const ips = [];
+  for (let i = start; i <= end; i++) ips.push(intToIp(i));
+  return ips;
+}
+
 function parseRanges(raw) {
   const groups = []; let curLabel = 'Range 1', curIPs = [], rangeNum = 1;
   for (const line of raw.split('\n')) {
@@ -225,6 +243,7 @@ function parseRanges(raw) {
     if (t.startsWith('#')) { curLabel = t.slice(1).trim() || `Range ${rangeNum}`; continue; }
     const ip = t.split(/[\s,;]/)[0];
     if (ip.includes('/')) curIPs.push(...expandCIDR(ip).map(e => ({ ip: e, range: curLabel })));
+    else if (ip.includes('-')) curIPs.push(...expandDashRange(ip).map(e => ({ ip: e, range: curLabel })));
     else if (/^\d+\.\d+\.\d+\.\d+$/.test(ip)) curIPs.push({ ip, range: curLabel });
   }
   if (curIPs.length) groups.push({ label: curLabel, ips: curIPs });

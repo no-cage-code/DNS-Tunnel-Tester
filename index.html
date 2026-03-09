@@ -99,7 +99,9 @@
   .fbtn{padding:4px 12px;border-radius:20px;font-size:11px;font-family:'Vazirmatn',sans-serif;
     border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;}
   .fbtn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,122,.07);}
-  .expbtn{margin-right:auto;padding:4px 14px;border-radius:20px;font-size:11px;
+  .fbtn.fbtn-tok.active{border-color:var(--tunnel);color:var(--tunnel);background:rgba(52,211,153,.1);}
+  .fbtn.fbtn-tfail.active{border-color:var(--danger);color:var(--danger);background:rgba(255,59,92,.08);}
+  .expbtn{padding:4px 14px;border-radius:20px;font-size:11px;
     font-family:'Vazirmatn',sans-serif;border:1px solid var(--blue);
     background:transparent;color:var(--blue);cursor:pointer;transition:all .15s;}
   .expbtn:hover{background:rgba(59,158,255,.1);}
@@ -154,8 +156,8 @@
 
     <div class="section-title">رنج‌ها / IP ها</div>
     <div class="field">
-      <textarea id="ranges" placeholder="# رنج اول&#10;102.23.226.0/24&#10;&#10;# رنج دوم&#10;94.182.0.0/24&#10;&#10;8.8.8.8"></textarea>
-      <div class="hint">خط خالی = جداکننده رنج‌ها &nbsp;|&nbsp; # = اسم رنج</div>
+      <textarea id="ranges" placeholder="# رنج اول&#10;102.23.226.0/24&#10;&#10;# رنج دوم&#10;94.182.0.0/24&#10;&#10;# IP خاص&#10;8.8.8.8&#10;&#10;# رنج dash&#10;1.1.1.1-1.1.1.10"></textarea>
+      <div class="hint">خط خالی = جداکننده رنج‌ها &nbsp;|&nbsp; # = اسم رنج &nbsp;|&nbsp; /24 یا 1.1.1.1-1.1.1.10</div>
     </div>
 
     <div class="section-title">تنظیمات tunnel</div>
@@ -227,7 +229,12 @@
       <button class="fbtn" onclick="setFilter('pass',this)">✓ pass</button>
       <button class="fbtn" onclick="setFilter('partial',this)">~ partial</button>
       <button class="fbtn" onclick="setFilter('fail',this)">✗ fail</button>
-      <button class="expbtn" onclick="exportIPs()">↓ خروجی IP های تمیز</button>
+      <button class="fbtn fbtn-tok" onclick="setFilter('tunnel_ok',this)">🟢 tunnel ✓</button>
+      <button class="fbtn fbtn-tfail" onclick="setFilter('tunnel_fail',this)">🔴 tunnel ✗</button>
+      <div style="margin-right:auto;display:flex;gap:6px;">
+        <button class="expbtn" onclick="exportIPs()">↓ IP</button>
+        <button class="expbtn" onclick="exportCSV()">↓ CSV</button>
+      </div>
     </div>
     <div class="tbl-wrap">
       <table>
@@ -389,11 +396,18 @@ function endScan() {
   }
 }
 
+function matchesFilter(r, f) {
+  if (f === 'all')         return true;
+  if (f === 'tunnel_ok')   return r.tunnelOk === true;
+  if (f === 'tunnel_fail') return r.tunnelOk !== true;
+  return r.status === f;
+}
+
 function handleResult(r) {
   allResults.push(r);
   document.getElementById('sTunnel').textContent = allResults.filter(x => x.tunnelOk).length;
   document.getElementById('sPass').textContent   = allResults.filter(x => x.status === 'pass').length;
-  if (filter === 'all' || filter === r.status) renderRow(r);
+  if (matchesFilter(r, filter)) renderRow(r);
 }
 
 function ck(v, cls) {
@@ -437,16 +451,36 @@ function setFilter(f, btn) {
   document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('tbody').innerHTML = '';
-  allResults.forEach(renderRow);
+  allResults.forEach(r => { if (matchesFilter(r, filter)) renderRow(r); });
+}
+
+function getFiltered() {
+  return allResults.filter(r => matchesFilter(r, filter) && r.score >= minScore);
 }
 
 function exportIPs() {
-  const list = allResults.filter(r =>
-    (filter === 'all' || r.status === filter) && r.score >= minScore);
+  const list = getFiltered();
   if (!list.length) { alert('نتیجه‌ای برای خروجی نیست.'); return; }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([list.map(r => r.ip).join('\n')], { type:'text/plain' }));
-  a.download = 'clean_dns.txt';
+  a.download = `dns_ips_${filter}.txt`;
+  a.click();
+}
+
+function exportCSV() {
+  const list = getFiltered();
+  if (!list.length) { alert('نتیجه‌ای برای خروجی نیست.'); return; }
+  const header = 'ip,range,status,score,tunnel,tunnelRcode,tunnelReason,tunnelLatency,udp,tcp53,recursive,txtSupport,tcpTunnelHS,ssh,sshBanner,udpLatency,tcp53Latency';
+  const rows = list.map(r => [
+    r.ip, `"${(r.range||'').replace(/"/g,'""')}"`, r.status, r.score,
+    r.tunnelOk?1:0, r.tunnelRcode||'', `"${(r.tunnelReason||'').replace(/"/g,'""')}"`, r.tunnelLatency,
+    r.udp?1:0, r.tcp53?1:0, r.recursive?1:0, r.txtSupport?1:0, r.tcpTunnelHS?1:0,
+    r.sshHS?1:0, `"${(r.sshBanner||'').replace(/"/g,'""')}"`, r.udpLatency, r.tcp53Latency
+  ].join(','));
+  const csv = [header, ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv' }));
+  a.download = `dns_results_${filter}.csv`;
   a.click();
 }
 </script>
