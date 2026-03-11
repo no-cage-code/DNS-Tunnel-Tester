@@ -3,7 +3,8 @@
   "version": "2.0.0",
   "description": "DNSTT + SSH scanner",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "tunnel": "node tunnel-server.js"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DNS Tunnel Final Tester</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Vazirmatn:wght@400;500;700&display=swap');
+  :root {
+    --bg:#080a0d; --surface:#0e1117; --surface2:#131720;
+    --border:#1c2030; --accent:#00e57a; --blue:#3b9eff;
+    --warn:#ffb020; --danger:#ff3b5c; --text:#dce3f0;
+    --muted:#4a546a; --pass:#00e57a; --fail:#ff3b5c;
+    --noiz:#a78bfa;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Vazirmatn',sans-serif;
+    height:100vh;display:grid;grid-template-rows:56px 1fr;overflow:hidden;}
+
+  header{display:flex;align-items:center;gap:14px;padding:0 24px;
+    background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;}
+  .logo{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--accent);}
+  .logo em{color:var(--muted);font-style:normal;}
+  .badge{font-family:'JetBrains Mono',monospace;font-size:11px;padding:3px 10px;
+    border-radius:20px;border:1px solid var(--border);color:var(--muted);
+    display:flex;align-items:center;gap:6px;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--fail);transition:all .3s;}
+  .dot.on{background:var(--pass);box-shadow:0 0 6px var(--pass);}
+  .hdr-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);
+    margin-right:auto;display:flex;gap:16px;}
+  .hdr-meta span{color:var(--accent);}
+
+  .layout{display:grid;grid-template-columns:340px 1fr;overflow:hidden;}
+
+  /* ── Sidebar ── */
+  .sidebar{background:var(--surface);border-left:1px solid var(--border);
+    padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;}
+
+  .sec{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;
+    letter-spacing:1.4px;padding:6px 0 4px;border-top:1px solid var(--border);margin-top:2px;}
+  .sec:first-child{border-top:none;margin-top:0;}
+
+  .field label{display:block;font-size:10px;font-weight:500;color:var(--muted);
+    text-transform:uppercase;letter-spacing:1.1px;margin-bottom:5px;}
+  textarea,input[type=text],input[type=number]{
+    width:100%;background:var(--bg);border:1px solid var(--border);
+    border-radius:7px;color:var(--text);font-family:'JetBrains Mono',monospace;
+    font-size:12px;padding:8px 10px;outline:none;resize:vertical;
+    transition:border-color .2s;direction:ltr;}
+  textarea{min-height:110px;}
+  textarea:focus,input:focus{border-color:var(--accent);}
+  .hint{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.6;}
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+
+  /* Mode radio */
+  .radio-group{display:flex;gap:6px;flex-wrap:wrap;}
+  .radio-group label{display:flex;align-items:center;gap:5px;cursor:pointer;
+    font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid var(--border);
+    transition:all .15s;user-select:none;}
+  .radio-group input[type=radio]{display:none;}
+  .radio-group label:has(input:checked){border-color:var(--accent);color:var(--accent);
+    background:rgba(0,229,122,.07);}
+  .radio-group label.noizdns:has(input:checked){border-color:var(--noiz);color:var(--noiz);
+    background:rgba(167,139,250,.07);}
+  .radio-group label.both:has(input:checked){border-color:var(--blue);color:var(--blue);
+    background:rgba(59,158,255,.07);}
+
+  /* Checkbox */
+  .chk-row{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;
+    padding:5px 0;user-select:none;}
+  .chk-row input[type=checkbox]{accent-color:var(--noiz);width:14px;height:14px;cursor:pointer;}
+
+  /* Buttons */
+  .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+  .btn{padding:9px 6px;border:none;border-radius:7px;font-family:'Vazirmatn',sans-serif;
+    font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;}
+  .btn-go{background:var(--accent);color:#000;grid-column:1/-1;}
+  .btn-go:hover{filter:brightness(1.1);}
+  .btn-go:disabled{opacity:.35;cursor:not-allowed;filter:none;}
+  .btn-stop{background:transparent;border:1px solid var(--danger);color:var(--danger);display:none;}
+  .btn-stop:hover{background:var(--danger);color:#fff;}
+
+  /* Progress */
+  .prog-wrap{display:flex;flex-direction:column;gap:4px;}
+  .prog-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .prog-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--blue));width:0%;transition:width .3s;}
+  .prog-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);text-align:center;}
+
+  /* Stats */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;}
+  .stat{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 5px;text-align:center;}
+  .stat .v{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;display:block;}
+  .stat .l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-top:2px;display:block;}
+
+  /* Activity */
+  .activity-box{background:var(--bg);border:1px solid var(--border);border-radius:7px;
+    padding:9px;max-height:130px;overflow-y:auto;}
+  .act-title{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px;}
+  .act-item{font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:2px 0;border-bottom:1px solid var(--border);}
+  .act-item:last-child{border-bottom:none;}
+  .act-ip{color:var(--text);flex:1;}
+  .act-proto{padding:1px 5px;border-radius:3px;font-size:10px;margin-right:4px;}
+  .act-proto.dnstt{color:var(--accent);background:rgba(0,229,122,.08);}
+  .act-proto.noizdns{color:var(--noiz);background:rgba(167,139,250,.08);}
+
+  /* Panel */
+  .panel{display:flex;flex-direction:column;overflow:hidden;}
+  .toolbar{padding:9px 16px;border-bottom:1px solid var(--border);background:var(--surface);
+    display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;}
+  .fbtn{padding:4px 12px;border-radius:20px;font-size:11px;font-family:'Vazirmatn',sans-serif;
+    border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;}
+  .fbtn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,122,.07);}
+  .fbtn.f-fail.active{border-color:var(--danger);color:var(--danger);background:rgba(255,59,92,.08);}
+  .fbtn.f-noiz.active{border-color:var(--noiz);color:var(--noiz);background:rgba(167,139,250,.08);}
+  .expbtn{padding:4px 14px;border-radius:20px;font-size:11px;
+    font-family:'Vazirmatn',sans-serif;border:1px solid var(--blue);
+    background:transparent;color:var(--blue);cursor:pointer;transition:all .15s;margin-right:auto;}
+  .expbtn:hover{background:rgba(59,158,255,.1);}
+
+  .tbl-wrap{flex:1;overflow-y:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  thead th{position:sticky;top:0;background:var(--surface2);padding:8px;text-align:center;
+    font-size:10px;font-weight:500;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.7px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  thead th:first-child{text-align:right;}
+  tbody tr{border-bottom:1px solid var(--border);animation:rowIn .15s ease;}
+  @keyframes rowIn{from{opacity:0;transform:translateY(-2px);}to{opacity:1;}}
+  tbody tr:hover{background:var(--surface2);}
+  tbody tr.pass td:first-child{border-right:3px solid var(--pass);}
+  tbody tr.fail td:first-child{border-right:3px solid var(--fail);opacity:.45;}
+  td{padding:5px 8px;white-space:nowrap;text-align:center;}
+  td:first-child{text-align:right;}
+  .td-ip{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;direction:ltr;text-align:left;}
+  .td-proto{font-family:'JetBrains Mono',monospace;font-size:11px;padding:2px 6px;border-radius:4px;}
+  .td-proto.dnstt{color:var(--accent);background:rgba(0,229,122,.08);}
+  .td-proto.noizdns{color:var(--noiz);background:rgba(167,139,250,.08);}
+  .td-status{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;}
+  .td-status.pass{color:var(--pass);}
+  .td-status.fail{color:var(--fail);}
+  .td-lat{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);}
+  .td-err{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--danger);
+    max-width:200px;overflow:hidden;text-overflow:ellipsis;text-align:left;}
+  .empty{padding:60px;text-align:center;color:var(--muted);font-size:13px;}
+
+  /* Log panel */
+  .log-panel{border-top:1px solid var(--border);background:var(--bg);
+    display:flex;flex-direction:column;flex-shrink:0;height:160px;}
+  .log-title{padding:5px 16px;font-size:10px;color:var(--muted);text-transform:uppercase;
+    letter-spacing:1px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+  .log-clear{cursor:pointer;color:var(--muted);font-size:10px;background:none;border:none;padding:2px 6px;}
+  .log-clear:hover{color:var(--text);}
+  .log-body{flex:1;overflow-y:auto;padding:6px 16px;font-family:'JetBrains Mono',monospace;font-size:10.5px;line-height:1.7;}
+  .log-line{color:var(--muted);}
+  .log-line.pass{color:var(--pass);}
+  .log-line.fail{color:var(--fail);}
+  .log-line.stderr{color:var(--warn);}
+  .log-line.spawn{color:var(--blue);}
+  ::-webkit-scrollbar{width:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+  /* Warn banner */
+  .warn-banner{background:rgba(255,176,32,.08);border:1px solid var(--warn);border-radius:7px;
+    padding:8px 12px;font-size:11px;color:var(--warn);line-height:1.7;display:none;}
+  .warn-banner.show{display:block;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">tunnel<em>//</em>tester</div>
+  <div class="badge">
+    <div class="dot" id="dot"></div>
+    <span id="srvLbl">server offline</span>
+  </div>
+  <div class="hdr-meta">
+    <div>pubkey: <span id="hdrKey">—</span></div>
+    <div>domain: <span id="hdrDomain">—</span></div>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+
+    <div class="sec">پیکربندی dnstt-client</div>
+
+    <div class="warn-banner" id="warnBanner">
+      ⚠️ مسیر <code>dnstt-client</code> تنظیم نشده.<br>
+      بعد از وارد کردن مسیر، دکمه شروع را بزنید.
+    </div>
+
+    <div class="field">
+      <label>مسیر dnstt-client binary</label>
+      <input type="text" id="dnsttPath" placeholder="/path/to/dnstt-client" dir="ltr"
+             value="">
+      <div class="hint">مسیر کامل فایل اجرایی dnstt-client روی مک</div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>Public Key (hex)</label>
+        <input type="text" id="pubkey" dir="ltr" value="" placeholder="از config.js بارگذاری می‌شود">
+      </div>
+      <div class="field">
+        <label>Tunnel Domain</label>
+        <input type="text" id="tunnelDomain" dir="ltr" value="" placeholder="از config.js بارگذاری می‌شود">
+      </div>
+    </div>
+
+    <div class="sec">لیست IP ها</div>
+
+    <div class="field">
+      <textarea id="ipList" placeholder="1.2.3.4&#10;5.6.7.8&#10;9.10.11.12"></textarea>
+      <div class="hint">یک IP در هر خط</div>
+    </div>
+
+    <div class="sec">حالت تست</div>
+
+    <div class="radio-group">
+      <label><input type="radio" name="mode" value="dnstt" checked> dnstt</label>
+    </div>
+    <div class="hint">⚠️ باینری dnstt-client فعلی از فلگ <code style="color:var(--warn)">-noiz</code> پشتیبانی نمی‌کند. فقط حالت dnstt در دسترس است.</div>
+
+    <div class="sec">تنظیمات</div>
+
+    <div class="row3">
+      <div class="field">
+        <label>workers</label>
+        <input type="number" id="concurrency" value="5" min="1" max="20">
+      </div>
+      <div class="field">
+        <label>startup (ms)</label>
+        <input type="number" id="startupMs" value="5000" min="2000" max="15000" step="500">
+      </div>
+      <div class="field">
+        <label>test (ms)</label>
+        <input type="number" id="testMs" value="25000" min="5000" max="60000" step="1000">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-go"  id="goBtn"  onclick="startTest()">▶ شروع تست</button>
+      <button class="btn btn-stop" id="stopBtn" onclick="stopTest()">■ توقف</button>
+    </div>
+
+    <div class="prog-wrap">
+      <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+      <div class="prog-label" id="progLabel"></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><span class="v" id="sTotal">—</span><span class="l">کل</span></div>
+      <div class="stat"><span class="v" id="sPass" style="color:var(--pass)">0</span><span class="l">pass ✅</span></div>
+      <div class="stat"><span class="v" id="sFail" style="color:var(--fail)">0</span><span class="l">fail ❌</span></div>
+      <div class="stat"><span class="v" id="sActive" style="color:var(--blue)">0</span><span class="l">active</span></div>
+    </div>
+
+    <div class="activity-box">
+      <div class="act-title">⚡ live</div>
+      <div id="activity"></div>
+    </div>
+
+  </div>
+
+  <!-- ── Main Panel ── -->
+  <div class="panel">
+    <div class="toolbar">
+      <button class="fbtn active"          onclick="setFilter('all',this)">همه</button>
+      <button class="fbtn"                 onclick="setFilter('pass',this)">✓ pass</button>
+      <button class="fbtn f-fail"          onclick="setFilter('fail',this)">✗ fail</button>
+      <button class="expbtn"               onclick="exportCSV()">↓ CSV</button>
+      <button class="expbtn" style="border-color:var(--pass);color:var(--pass)"
+                               onclick="exportPassIPs()">↓ Pass IPs</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th style="text-align:right">IP</th>
+          <th>پروتکل</th>
+          <th>وضعیت</th>
+          <th>تأخیر</th>
+          <th style="text-align:left">خطا</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="empty">IP ها را وارد کنید و تست را شروع کنید</div>
+    </div>
+    <div class="log-panel">
+      <div class="log-title">
+        <span>📋 log</span>
+        <button class="log-clear" onclick="clearLog()">پاک کردن</button>
+      </div>
+      <div class="log-body" id="logBody"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:3738';
+let allResults = [], filter = 'all', scanning = false;
+
+// ── Server ping ───────────────────────────────────────────────────────────────
+async function ping() {
+  try {
+    const r = await fetch(`${API}/ping`, { signal: AbortSignal.timeout(2000) });
+    if (r.ok) {
+      const d = await r.json();
+      document.getElementById('dot').classList.add('on');
+      document.getElementById('srvLbl').textContent = 'server online';
+      if (!d.dnsttSet) document.getElementById('warnBanner').classList.add('show');
+      else document.getElementById('warnBanner').classList.remove('show');
+      // پر کردن فیلدها از config سرور (فقط اگر کاربر هنوز چیزی وارد نکرده)
+      if (d.pubkey       && !document.getElementById('pubkey').dataset.edited)
+        document.getElementById('pubkey').value = d.pubkey;
+      if (d.tunnelDomain && !document.getElementById('tunnelDomain').dataset.edited)
+        document.getElementById('tunnelDomain').value = d.tunnelDomain;
+      syncMeta();
+    } else throw 0;
+  } catch {
+    document.getElementById('dot').classList.remove('on');
+    document.getElementById('srvLbl').textContent = 'server offline';
+  }
+}
+ping(); setInterval(ping, 5000);
+
+// Sync header meta from inputs
+function syncMeta() {
+  document.getElementById('hdrKey').textContent =
+    (document.getElementById('pubkey').value || '').slice(0, 12) + '…';
+  document.getElementById('hdrDomain').textContent =
+    document.getElementById('tunnelDomain').value || '—';
+}
+document.querySelectorAll('#pubkey,#tunnelDomain').forEach(el => el.addEventListener('input', () => {
+  el.dataset.edited = '1'; syncMeta();
+}));
+syncMeta();
+
+// ── Live activity ─────────────────────────────────────────────────────────────
+function renderActive(list) {
+  document.getElementById('sActive').textContent = list.length;
+  document.getElementById('activity').innerHTML = list.slice(-10).map(e =>
+    `<div class="act-item">
+      <span class="act-ip">${e.ip}</span>
+      <span class="act-proto ${e.protocol}">${e.protocol}</span>
+    </div>`
+  ).join('');
+}
+
+// ── Start test ────────────────────────────────────────────────────────────────
+function startTest() {
+  const ipRaw       = document.getElementById('ipList').value.trim();
+  const dnsttPath   = document.getElementById('dnsttPath').value.trim();
+  const pubkey      = document.getElementById('pubkey').value.trim();
+  const tunnelDomain= document.getElementById('tunnelDomain').value.trim();
+  const mode        = document.querySelector('input[name="mode"]:checked').value;
+  const stealth     = false;
+  const concurrency = parseInt(document.getElementById('concurrency').value) || 5;
+  const startupMs   = parseInt(document.getElementById('startupMs').value)   || 5000;
+  const testMs      = parseInt(document.getElementById('testMs').value)       || 8000;
+
+  if (!ipRaw) { alert('لیست IP خالی است'); return; }
+  if (!dnsttPath) { alert('مسیر dnstt-client را وارد کنید'); return; }
+
+  const ips = ipRaw.split('\n').map(s => s.trim()).filter(Boolean);
+
+  // Reset
+  allResults = [];
+  document.getElementById('tbody').innerHTML   = '';
+  document.getElementById('empty').style.display = 'none';
+  ['sTotal','sPass','sFail','sActive'].forEach(id =>
+    document.getElementById(id).textContent = id === 'sTotal' ? '…' : '0');
+  document.getElementById('progFill').style.width  = '0%';
+  document.getElementById('progLabel').textContent = '';
+  document.getElementById('goBtn').disabled        = true;
+  document.getElementById('stopBtn').style.display = 'inline-block';
+  renderActive([]);
+  scanning = true;
+
+  fetch(`${API}/test`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ ips, mode, dnsttPath, pubkey, tunnelDomain,
+                              stealth, concurrency, startupMs, testMs }),
+  }).then(res => {
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = '', lastEvt = '';
+
+    function read() {
+      reader.read().then(({ done, value }) => {
+        if (done || !scanning) { endTest(); return; }
+        buf += dec.decode(value);
+        const lines = buf.split('\n'); buf = lines.pop();
+        for (const line of lines) {
+          if      (line.startsWith('event: ')) { lastEvt = line.slice(7).trim(); }
+          else if (line.startsWith('data: ')) {
+            try {
+              const d = JSON.parse(line.slice(6));
+              if      (lastEvt === 'start')    { document.getElementById('sTotal').textContent = d.total; }
+              else if (lastEvt === 'active')   { renderActive(d.list || []); }
+              else if (lastEvt === 'result')   { handleResult(d); }
+              else if (lastEvt === 'progress') { updateProgress(d); }
+              else if (lastEvt === 'log')      { addLog(d.msg); }
+              else if (lastEvt === 'done')     { endTest(); }
+            } catch {}
+          }
+        }
+        read();
+      });
+    }
+    read();
+  }).catch(() => {
+    alert('سرور در دسترس نیست.\n\nاجرا کنید:\n  node tunnel-server.js');
+    endTest();
+  });
+}
+
+async function stopTest() {
+  await fetch(`${API}/stop`, { method: 'POST' });
+  scanning = false;
+}
+
+function endTest() {
+  scanning = false;
+  document.getElementById('goBtn').disabled        = false;
+  document.getElementById('stopBtn').style.display = 'none';
+  document.getElementById('progFill').style.width  = '100%';
+  renderActive([]);
+  if (!allResults.length) {
+    document.getElementById('empty').style.display  = 'block';
+    document.getElementById('empty').textContent    = 'نتیجه‌ای یافت نشد.';
+  }
+}
+
+function updateProgress(d) {
+  const pct = d.total ? Math.round(d.done / d.total * 100) : 0;
+  document.getElementById('progFill').style.width  = pct + '%';
+  document.getElementById('progLabel').textContent =
+    `${d.done} / ${d.total}  (${pct}%)  active: ${d.active}`;
+}
+
+// ── Handle result ─────────────────────────────────────────────────────────────
+function handleResult(r) {
+  allResults.push(r);
+  document.getElementById('sPass').textContent = allResults.filter(x => x.status === 'pass').length;
+  document.getElementById('sFail').textContent = allResults.filter(x => x.status === 'fail').length;
+  if (matchFilter(r)) renderRow(r);
+}
+
+function matchFilter(r) {
+  if (filter === 'all')         return true;
+  if (filter === 'pass')        return r.status === 'pass';
+  if (filter === 'fail')        return r.status === 'fail';
+  if (filter === 'noizdns_pass')return r.protocol === 'noizdns' && r.status === 'pass';
+  return true;
+}
+
+function renderRow(r) {
+  const tbody = document.getElementById('tbody');
+  const tr    = document.createElement('tr');
+  tr.className = r.status;
+  const lat = r.latency_ms > 0 ? r.latency_ms + 'ms' : '—';
+  tr.innerHTML = `
+    <td class="td-ip">${r.ip}</td>
+    <td><span class="td-proto ${r.protocol}">${r.protocol}</span></td>
+    <td><span class="td-status ${r.status}">${r.status === 'pass' ? '✅ pass' : '❌ fail'}</span></td>
+    <td class="td-lat">${lat}</td>
+    <td class="td-err" title="${esc(r.error)}">${esc(r.error) || '<span style="color:var(--muted)">—</span>'}</td>`;
+  tbody.appendChild(tr);
+}
+
+// ── Log panel ──────────────────────────────────────────────────────────────────
+function addLog(msg) {
+  const body = document.getElementById('logBody');
+  const div  = document.createElement('div');
+  div.className = 'log-line' +
+    (msg.includes('PASS') ? ' pass' : '') +
+    (msg.includes('FAIL') ? ' fail' : '') +
+    (msg.includes('stderr') ? ' stderr' : '') +
+    (msg.includes('spawn:') ? ' spawn' : '');
+  div.textContent = msg;
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+}
+function clearLog() { document.getElementById('logBody').innerHTML = ''; }
+
+function esc(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Filter ────────────────────────────────────────────────────────────────────
+function setFilter(f, btn) {
+  filter = f;
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tbody').innerHTML = '';
+  allResults.forEach(r => { if (matchFilter(r)) renderRow(r); });
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+function exportCSV() {
+  if (!allResults.length) { alert('نتیجه‌ای برای خروجی نیست'); return; }
+  const header = 'ip,protocol,status,latency_ms,error';
+  const rows   = allResults.map(r =>
+    [r.ip, r.protocol, r.status, r.latency_ms,
+     `"${(r.error||'').replace(/"/g,'""')}"`].join(','));
+  download([header, ...rows].join('\n'), 'tunnel_results.csv', 'text/csv');
+}
+
+function exportPassIPs() {
+  const list = allResults.filter(r => r.status === 'pass').map(r => r.ip);
+  const uniq  = [...new Set(list)];
+  if (!uniq.length) { alert('هیچ IP موفقی یافت نشد'); return; }
+  download(uniq.join('\n'), 'tunnel_pass_ips.txt', 'text/plain');
+}
+
+function download(content, filename, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = filename;
+  a.click();
+}
+</script>
+</body>
+</html>
